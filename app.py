@@ -33,6 +33,7 @@ if "dark_mode"   not in st.session_state: st.session_state.dark_mode   = True
 if "sel_gender"  not in st.session_state: st.session_state.sel_gender  = ["Female", "Male", "Prefer not to say"]
 if "sel_age"     not in st.session_state: st.session_state.sel_age     = ["Under 20","20s","30s","40s","50s","60+"]
 if "sel_visit"   not in st.session_state: st.session_state.sel_visit   = ["First time","2–3 times","4+ times"]
+if "sel_tour"    not in st.session_state: st.session_state.sel_tour    = ["ALL"]  # ALL = 전체
 
 # ─────────────────────────────────────────────────────────────────────────────
 # THEME  변수
@@ -211,12 +212,30 @@ CAT_COLORS = {
 }
 GRAND_IMP, GRAND_SAT = 4.742, 4.718
 
+# 투어 목록 (유효 응답 8개만)
+TOUR_OPTIONS = {
+    "전체":         "ALL",
+    "Royal Heritage":   "Royal Heritage and Charm (Gyeongbokgung Palace - Insadong) (5hrs)",
+    "Fun Seagulls":     "Fun with the Seagulls (Ferry + Wolmi Park + Sinpo Traditional Market ) (4hrs)",
+    "Petit Shopping":   "Petit Shopping Delight (Sinpo Traditional Market) (3hrs)",
+    "Embracing Peace":  "Embracing Peace on Divided Land (Odusan Unification Observatory + Imjingak Pyeongwha Nuri Park) (5hrs)",
+    "Trendy Hub":       "Trendy Hub of Youth (Hongdae Street) (4hrs)",
+    "DMZ 3rd Tunnel":   "DMZ Tour: 3rd Tunnel & Dora Observatory (5hrs)",
+    "DMZ Aegibong":     "DMZ & Aegibong: The Closest view to North Korea (Aegibong Peace Ecopark) (4hrs)",
+    "Incheon City Bus": "Incheon City Tour Bus (Ocean Line)",
+}
+
 def apply_filters():
     mask = (
         df_all["Gender"].isin(st.session_state.sel_gender) &
         df_all["Age Group:"].isin(st.session_state.sel_age) &
         df_all["Previous visits to Korea"].isin(st.session_state.sel_visit)
     )
+    # 투어 필터 적용
+    sel = st.session_state.sel_tour
+    if sel and "ALL" not in sel:
+        tour_vals = [TOUR_OPTIONS[t] for t in sel if t in TOUR_OPTIONS and t != "전체"]
+        mask = mask & df_all["Which tour did you join?"].isin(tour_vals)
     return df_all[mask].copy()
 
 def pct(series, val):
@@ -373,6 +392,7 @@ with st.sidebar:
     ALL_GENDER = ["Female", "Male", "Prefer not to say"]
     ALL_AGE    = ["Under 20", "20s", "30s", "40s", "50s", "60+"]
     ALL_VISIT  = ["First time", "2–3 times", "4+ times"]
+    ALL_TOUR_KEYS = list(TOUR_OPTIONS.keys())  # ["전체","Royal Heritage",...]
 
     dff_temp = apply_filters()
     Nf_side  = len(dff_temp)
@@ -440,6 +460,38 @@ with st.sidebar:
 
     st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
 
+    # ── 투어 종류 필터
+    st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='filter-hdr' style='color:{T3};font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.4rem;'>투어 종류 (Tour)</div>",
+                unsafe_allow_html=True)
+
+    # 전체 버튼
+    is_all = "ALL" in st.session_state.sel_tour or len(st.session_state.sel_tour) == 0
+    if st.button("✈ 전체 투어", key="tour_ALL",
+                 use_container_width=True,
+                 type="primary" if is_all else "secondary"):
+        st.session_state.sel_tour = ["ALL"]
+        st.rerun()
+
+    # 개별 투어 버튼 (전체 제외)
+    for tk in ALL_TOUR_KEYS:
+        if tk == "전체":
+            continue
+        selected_t = (tk in st.session_state.sel_tour)
+        btn_t = "primary" if selected_t else "secondary"
+        if st.button(tk, key=f"tour_{tk}", use_container_width=True, type=btn_t):
+            if is_all:
+                # 전체 → 개별 하나만 선택
+                st.session_state.sel_tour = [tk]
+            elif selected_t:
+                new = [x for x in st.session_state.sel_tour if x != tk]
+                st.session_state.sel_tour = new if new else ["ALL"]
+            else:
+                st.session_state.sel_tour = [x for x in st.session_state.sel_tour if x != "ALL"] + [tk]
+            st.rerun()
+
+    st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
+
     # ── 전체 선택 / 초기화
     col_r1, col_r2 = st.columns(2)
     with col_r1:
@@ -447,12 +499,14 @@ with st.sidebar:
             st.session_state.sel_gender = list(ALL_GENDER)
             st.session_state.sel_age    = list(ALL_AGE)
             st.session_state.sel_visit  = list(ALL_VISIT)
+            st.session_state.sel_tour   = ["ALL"]
             st.rerun()
     with col_r2:
         if st.button("초기화", use_container_width=True):
             st.session_state.sel_gender = list(ALL_GENDER)
             st.session_state.sel_age    = list(ALL_AGE)
             st.session_state.sel_visit  = list(ALL_VISIT)
+            st.session_state.sel_tour   = ["ALL"]
             st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -473,7 +527,7 @@ with _hcol1:
       <div class='dash-sub'>
         Incheon International Airport&nbsp;·&nbsp;
         현재 응답자 <b style='color:{T1};'>{Nf}</b> / 434&nbsp;·&nbsp;
-        성별 {len(st.session_state.sel_gender)}개 · 연령 {len(st.session_state.sel_age)}개 · 방문 경험 {len(st.session_state.sel_visit)}개 선택됨
+        성별 {len(st.session_state.sel_gender)}개 · 연령 {len(st.session_state.sel_age)}개 · 방문 {len(st.session_state.sel_visit)}개 · 투어 {"전체" if "ALL" in st.session_state.sel_tour else str(len(st.session_state.sel_tour))+"개"}
       </div>
     </div>
     """, unsafe_allow_html=True)
